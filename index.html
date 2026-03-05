@@ -2,193 +2,311 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pro 3D Racing</title>
+<title>Advanced Ragdoll Archery</title>
+
 <style>
-body { margin:0; overflow:hidden; background:black; }
+
+body{
+margin:0;
+overflow:hidden;
+background:linear-gradient(#87CEEB,#4CAF50);
+font-family:sans-serif;
+}
+
+canvas{
+display:block;
+touch-action:none;
+}
+
 #ui{
- position:absolute;
- top:10px;
- left:10px;
- color:white;
- font-family:Arial;
+position:absolute;
+top:10px;
+left:10px;
+color:white;
+font-size:18px;
 }
-#joystick{
- position:absolute;
- bottom:40px;
- left:40px;
- width:120px;
- height:120px;
- border-radius:50%;
- background:rgba(255,255,255,0.2);
+
+.healthbar{
+width:150px;
+height:10px;
+background:#333;
+margin-bottom:5px;
 }
-#stick{
- position:absolute;
- width:60px;
- height:60px;
- border-radius:50%;
- background:white;
- top:30px;
- left:30px;
+
+.health{
+height:100%;
+background:red;
 }
+
 </style>
 </head>
+
 <body>
 
-<div id="ui">Lap: <span id="lap">1</span></div>
+<div id="ui">
 
-<div id="joystick"><div id="stick"></div></div>
+PLAYER
+<div class="healthbar"><div id="pbar" class="health"></div></div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.150/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.150/examples/js/loaders/GLTFLoader.js"></script>
+ENEMY
+<div class="healthbar"><div id="ebar" class="health"></div></div>
+
+</div>
+
+<canvas id="game"></canvas>
 
 <script>
-let scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
 
-let camera = new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
-let renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth,innerHeight);
-renderer.shadowMap.enabled = true;
-document.body.appendChild(renderer.domElement);
+const canvas = document.getElementById("game")
+const ctx = canvas.getContext("2d")
 
-/* Lighting */
-let sun = new THREE.DirectionalLight(0xffffff,1);
-sun.position.set(10,20,10);
-sun.castShadow = true;
-scene.add(sun);
-scene.add(new THREE.AmbientLight(0x404040));
+function resize(){
+canvas.width = window.innerWidth
+canvas.height = window.innerHeight
+}
+resize()
+window.addEventListener("resize",resize)
 
-/* Ground */
-let ground = new THREE.Mesh(
- new THREE.PlaneGeometry(500,500),
- new THREE.MeshStandardMaterial({color:0x228B22})
-);
-ground.rotation.x = -Math.PI/2;
-ground.receiveShadow = true;
-scene.add(ground);
+let gravity = 0.4
 
-/* City Blocks */
-for(let i=0;i<50;i++){
- let b = new THREE.Mesh(
-  new THREE.BoxGeometry(5,Math.random()*20+5,5),
-  new THREE.MeshStandardMaterial({color:0x888888})
- );
- b.position.set((Math.random()-0.5)*200, b.geometry.parameters.height/2, (Math.random()-0.5)*200);
- b.castShadow = true;
- scene.add(b);
+class Arrow{
+
+constructor(x,y,vx,vy){
+this.x=x
+this.y=y
+this.vx=vx
+this.vy=vy
 }
 
-/* Load Car Model */
-let loader = new THREE.GLTFLoader();
-let car;
-loader.load(
- 'https://threejs.org/examples/models/gltf/Flamingo.glb', // placeholder model
- function(gltf){
-  car = gltf.scene;
-  car.scale.set(0.02,0.02,0.02);
-  car.position.y = 0.2;
-  car.traverse(n=>{ if(n.isMesh){ n.castShadow=true; }});
-  scene.add(car);
- }
-);
+update(){
 
-/* AI Traffic */
-let traffic = [];
-for(let i=0;i<5;i++){
- let t = new THREE.Mesh(
-  new THREE.BoxGeometry(1,0.5,2),
-  new THREE.MeshStandardMaterial({color:0xff0000})
- );
- t.position.set((Math.random()-0.5)*20,0.25,-i*20);
- t.castShadow = true;
- scene.add(t);
- traffic.push(t);
+this.vy += gravity
+this.x += this.vx
+this.y += this.vy
+
 }
 
-/* Rain */
-let rainGeo = new THREE.BufferGeometry();
-let rainCount = 2000;
-let pos = [];
-for(let i=0;i<rainCount;i++){
- pos.push((Math.random()-0.5)*400,Math.random()*200,(Math.random()-0.5)*400);
+draw(){
+
+ctx.beginPath()
+ctx.moveTo(this.x,this.y)
+ctx.lineTo(this.x-this.vx*4,this.y-this.vy*4)
+ctx.strokeStyle="brown"
+ctx.lineWidth=4
+ctx.stroke()
+
 }
-rainGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
-let rain = new THREE.Points(rainGeo,new THREE.PointsMaterial({color:0xaaaaaa,size:0.1}));
-scene.add(rain);
 
-/* Movement */
-let speed=0, drift=0;
-let lap=1;
-
-function animate(){
- requestAnimationFrame(animate);
-
- if(car){
-  speed += 0.002;
-  speed *= 0.99;
-
-  car.position.z -= speed*5;
-  car.position.x += drift;
-
-  // Drift system
-  drift *= 0.95;
-
-  // Camera follow cinematic
-  camera.position.lerp(
-   new THREE.Vector3(car.position.x,3,car.position.z+8),
-   0.1
-  );
-  camera.lookAt(car.position);
-
-  // Traffic AI
-  traffic.forEach(t=>{
-   t.position.z += 0.5;
-   if(t.position.z > car.position.z+10)
-    t.position.z = car.position.z-100;
-
-   // Collision
-   if(t.position.distanceTo(car.position)<1){
-    speed *= -0.3; // crash physics
-   }
-  });
-
-  // Lap system
-  if(car.position.z < -200){
-   lap++;
-   document.getElementById("lap").innerText=lap;
-   car.position.z=0;
-  }
- }
-
- // Rain fall
- rain.geometry.attributes.position.array.forEach((v,i,arr)=>{
-  if(i%3==1){
-   arr[i]-=0.5;
-   if(arr[i]<0) arr[i]=200;
-  }
- });
- rain.geometry.attributes.position.needsUpdate=true;
-
- renderer.render(scene,camera);
 }
-animate();
 
-/* Mobile Joystick */
-let joystick=document.getElementById("joystick");
-let stick=document.getElementById("stick");
+let arrows=[]
 
-joystick.addEventListener("touchmove",e=>{
- let rect=joystick.getBoundingClientRect();
- let x=e.touches[0].clientX-rect.left-60;
- drift = x*0.001;
-});
+class Ragdoll{
 
-window.addEventListener("resize",()=>{
- camera.aspect=innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
-});
+constructor(x,color){
+
+this.x=x
+this.y=0
+this.color=color
+this.health=100
+
+}
+
+update(){
+this.y = canvas.height-220
+}
+
+draw(){
+
+ctx.strokeStyle=this.color
+ctx.lineWidth=6
+
+let x=this.x
+let y=this.y
+
+// head
+ctx.beginPath()
+ctx.arc(x,y-20,12,0,Math.PI*2)
+ctx.stroke()
+
+// body
+ctx.beginPath()
+ctx.moveTo(x,y)
+ctx.lineTo(x,y+60)
+ctx.stroke()
+
+// arms
+ctx.beginPath()
+ctx.moveTo(x,y+10)
+ctx.lineTo(x-30,y+30)
+
+ctx.moveTo(x,y+10)
+ctx.lineTo(x+30,y+30)
+ctx.stroke()
+
+// legs
+ctx.beginPath()
+ctx.moveTo(x,y+60)
+ctx.lineTo(x-25,y+100)
+
+ctx.moveTo(x,y+60)
+ctx.lineTo(x+25,y+100)
+ctx.stroke()
+
+}
+
+}
+
+let player = new Ragdoll(150,"blue")
+let enemy = new Ragdoll(0,"red")
+
+function updatePositions(){
+
+enemy.x = canvas.width-150
+
+}
+
+let aiming=false
+let aimX=0
+let aimY=0
+
+function shoot(px,py){
+
+let dx = px-player.x
+let dy = py-player.y
+
+let power = 0.16
+
+arrows.push(new Arrow(player.x,player.y,dx*power,dy*power))
+
+}
+
+canvas.addEventListener("mousedown",e=>{
+aiming=true
+aimX=e.clientX
+aimY=e.clientY
+})
+
+canvas.addEventListener("mousemove",e=>{
+if(aiming){
+aimX=e.clientX
+aimY=e.clientY
+}
+})
+
+canvas.addEventListener("mouseup",()=>{
+shoot(aimX,aimY)
+aiming=false
+})
+
+canvas.addEventListener("touchstart",e=>{
+aiming=true
+let t=e.touches[0]
+aimX=t.clientX
+aimY=t.clientY
+})
+
+canvas.addEventListener("touchmove",e=>{
+let t=e.touches[0]
+aimX=t.clientX
+aimY=t.clientY
+})
+
+canvas.addEventListener("touchend",()=>{
+shoot(aimX,aimY)
+aiming=false
+})
+
+function enemyShoot(){
+
+let dx = player.x-enemy.x
+let dy = player.y-enemy.y
+
+let power = 0.14
+
+arrows.push(new Arrow(enemy.x,enemy.y,dx*power,dy*power))
+
+}
+
+setInterval(enemyShoot,2000)
+
+function hitCheck(a){
+
+// headshot
+if(Math.abs(a.x-enemy.x)<12 && Math.abs(a.y-(enemy.y-20))<12){
+enemy.health-=35
+return true
+}
+
+// body
+if(Math.abs(a.x-enemy.x)<25 && Math.abs(a.y-enemy.y)<60){
+enemy.health-=15
+return true
+}
+
+// player body
+if(Math.abs(a.x-player.x)<25 && Math.abs(a.y-player.y)<60){
+player.health-=15
+return true
+}
+
+return false
+
+}
+
+function update(){
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+
+updatePositions()
+
+player.update()
+enemy.update()
+
+player.draw()
+enemy.draw()
+
+if(aiming){
+
+ctx.beginPath()
+ctx.moveTo(player.x,player.y)
+ctx.lineTo(aimX,aimY)
+ctx.strokeStyle="white"
+ctx.lineWidth=2
+ctx.stroke()
+
+}
+
+for(let a of arrows){
+
+a.update()
+a.draw()
+
+if(hitCheck(a)){
+a.y=9999
+}
+
+}
+
+document.getElementById("pbar").style.width=player.health+"%"
+document.getElementById("ebar").style.width=enemy.health+"%"
+
+if(player.health<=0){
+alert("Enemy Wins!")
+location.reload()
+}
+
+if(enemy.health<=0){
+alert("You Win!")
+location.reload()
+}
+
+requestAnimationFrame(update)
+
+}
+
+update()
+
 </script>
 
 </body>
