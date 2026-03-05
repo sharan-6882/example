@@ -2,14 +2,14 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Ragdoll Archery Levels</title>
+<title>game</title>
 
 <style>
 
 body{
 margin:0;
 overflow:hidden;
-background:linear-gradient(#87CEEB,#3fa34d);
+background:linear-gradient(#7ec0ee,#3fa34d);
 font-family:sans-serif;
 }
 
@@ -26,8 +26,8 @@ color:white;
 }
 
 .bar{
-width:150px;
-height:10px;
+width:160px;
+height:12px;
 background:#333;
 margin-bottom:5px;
 }
@@ -49,8 +49,7 @@ LEVEL: <span id="level">1</span><br><br>
 PLAYER
 <div class="bar"><div id="php" class="hp"></div></div>
 
-ENEMY
-<div class="bar"><div id="ehp" class="hp"></div></div>
+ENEMIES LEFT: <span id="enemycount">1</span>
 
 </div>
 
@@ -58,20 +57,19 @@ ENEMY
 
 <script>
 
-const canvas=document.getElementById("game")
-const ctx=canvas.getContext("2d")
+const canvas = document.getElementById("game")
+const ctx = canvas.getContext("2d")
 
 function resize(){
-canvas.width=window.innerWidth
-canvas.height=window.innerHeight
+canvas.width = window.innerWidth
+canvas.height = window.innerHeight
 }
 resize()
 window.addEventListener("resize",resize)
 
-let gravity=0.4
-let arrows=[]
-
-let level=1
+let gravity = 0.4
+let arrows = []
+let level = 1
 
 class Arrow{
 
@@ -114,6 +112,7 @@ this.x=x
 this.y=0
 this.color=color
 this.health=100
+this.alive=true
 
 }
 
@@ -122,6 +121,8 @@ this.y=canvas.height-220
 }
 
 draw(){
+
+if(!this.alive) return
 
 let x=this.x
 let y=this.y
@@ -160,12 +161,32 @@ ctx.stroke()
 
 }
 
-let player=new Fighter(150,"blue")
-let enemy=new Fighter(0,"red")
+let player = new Fighter(150,"blue")
 
-function updatePositions(){
-enemy.x=canvas.width-150
+let enemies = []
+
+function spawnEnemies(){
+
+enemies=[]
+
+let count = level + 1
+
+for(let i=0;i<count;i++){
+
+let spacing = canvas.width/(count+1)
+let x = spacing*(i+1)
+
+if(x<250) x+=250
+
+enemies.push(new Fighter(x,"red"))
+
 }
+
+document.getElementById("enemycount").innerText=enemies.length
+
+}
+
+spawnEnemies()
 
 let aiming=false
 let aimX=0
@@ -173,8 +194,8 @@ let aimY=0
 
 function shoot(px,py){
 
-let dx=px-player.x
-let dy=py-player.y
+let dx = px-player.x
+let dy = py-player.y
 
 let power=0.16
 
@@ -218,35 +239,54 @@ shoot(aimX,aimY)
 aiming=false
 })
 
-function enemyShoot(){
+function enemyShoot(enemy){
 
-let dx=player.x-enemy.x
-let dy=player.y-enemy.y
+if(!enemy.alive) return
 
-let power=0.13+(level*0.01)
+let dx = player.x-enemy.x
+let dy = player.y-enemy.y
+
+let power = 0.12+(level*0.01)
 
 arrows.push(new Arrow(enemy.x,enemy.y,dx*power,dy*power))
 
 }
 
-setInterval(enemyShoot,2200)
+setInterval(()=>{
+
+for(let e of enemies){
+enemyShoot(e)
+}
+
+},2200)
 
 function hitCheck(a){
 
-// enemy headshot
-if(Math.abs(a.x-enemy.x)<12 && Math.abs(a.y-(enemy.y-20))<12){
+// enemies
+for(let e of enemies){
 
-enemy.health-=35
+if(!e.alive) continue
+
+if(Math.abs(a.x-e.x)<12 && Math.abs(a.y-(e.y-20))<12){
+
+e.health-=35
 a.stuck=true
-return
+
 }
 
-// enemy body
-if(Math.abs(a.x-enemy.x)<25 && Math.abs(a.y-enemy.y)<60){
+else if(Math.abs(a.x-e.x)<25 && Math.abs(a.y-e.y)<60){
 
-enemy.health-=15
+e.health-=15
 a.stuck=true
-return
+
+}
+
+if(e.health<=0){
+
+e.alive=false
+
+}
+
 }
 
 // player
@@ -254,7 +294,7 @@ if(Math.abs(a.x-player.x)<25 && Math.abs(a.y-player.y)<60){
 
 player.health-=15
 a.stuck=true
-return
+
 }
 
 }
@@ -264,9 +304,9 @@ function nextLevel(){
 level++
 
 player.health=100
-enemy.health=100
-
 arrows=[]
+
+spawnEnemies()
 
 document.getElementById("level").innerText=level
 
@@ -276,13 +316,15 @@ function update(){
 
 ctx.clearRect(0,0,canvas.width,canvas.height)
 
-updatePositions()
-
 player.update()
-enemy.update()
-
 player.draw()
-enemy.draw()
+
+for(let e of enemies){
+
+e.update()
+e.draw()
+
+}
 
 if(aiming){
 
@@ -299,18 +341,19 @@ for(let a of arrows){
 
 a.update()
 a.draw()
+
 hitCheck(a)
 
 }
 
+let alive=enemies.filter(e=>e.alive).length
+
+document.getElementById("enemycount").innerText=alive
 document.getElementById("php").style.width=player.health+"%"
-document.getElementById("ehp").style.width=enemy.health+"%"
 
-if(enemy.health<=0){
+if(alive===0){
 
-setTimeout(()=>{
-nextLevel()
-},600)
+setTimeout(nextLevel,800)
 
 }
 
